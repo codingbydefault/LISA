@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent
 KNOWLEDGE_DIR = ROOT / "knowledge"
 WEB_DIR = ROOT / "web"
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "10m")
 MAX_BODY_SIZE = 2 * 1024 * 1024
 MAX_DOCUMENT_SIZE = 1024 * 1024
 MAX_AUDIO_SIZE = 8 * 1024 * 1024
@@ -21,6 +22,8 @@ ALLOWED_EXTENSIONS = {".txt", ".md"}
 WHISPER_MODEL_NAME = os.environ.get("WHISPER_MODEL", "base")
 WHISPER_LOCK = threading.Lock()
 WHISPER_MODEL = None
+
+
 def ollama_request(path, payload=None, timeout=60):
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     request = urllib.request.Request(
@@ -36,12 +39,50 @@ def ollama_request(path, payload=None, timeout=60):
 def generate_chat_response(model, messages):
     response = ollama_request(
         "/api/chat",
-        {"model": model, "stream": False, "messages": messages},
+        {
+            "model": model,
+            "stream": False,
+            "keep_alive": OLLAMA_KEEP_ALIVE,
+            "messages": messages,
+        },
     )
     answer = response.get("message", {}).get("content")
     if not isinstance(answer, str) or not answer:
         raise RuntimeError("Ollama gaf geen antwoordtekst terug.")
     return answer
+
+
+def stream_chat_response(model, messages):
+    request = urllib.request.Request(
+        f"{OLLAMA_URL}/api/chat",
+        data=json.dumps({
+            "model": model,
+            "stream": True,
+            "keep_alive": OLLAMA_KEEP_ALIVE,
+            "messages": messages,
+        }).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    answer_parts = []
+    completed = False
+    with urllib.request.urlopen(request, timeout=300) as response:
+        for line in response:
+            if not line.strip():
+                continue
+            chunk = json.loads(line.decode("utf-8"))
+            if chunk.get("error"):
+                raise RuntimeError(f"Ollama: {chunk['error']}")
+            content = chunk.get("message", {}).get("content", "")
+            if content:
+                answer_parts.append(content)
+                yield content
+            if chunk.get("done"):
+                completed = True
+    if not completed:
+        raise RuntimeError("Ollama heeft de stream onverwacht beëindigd.")
+    if not "".join(answer_parts):
+        raise RuntimeError("Ollama gaf geen antwoordtekst terug.")
 
 
 def get_documents():
@@ -85,6 +126,14 @@ class AssistantHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def send_stream_event(self, event_type, payload):
+        data = json.dumps(
+            {"type": event_type, **payload},
+            ensure_ascii=False,
+        ).encode("utf-8") + b"\n"
+        self.wfile.write(data)
+        self.wfile.flush()
 
     def read_json(self):
         try:
@@ -177,6 +226,7 @@ class AssistantHandler(BaseHTTPRequestHandler):
             self.send_json(500, {"error": f"Opslaan mislukt: {error}"})
 
     def chat(self):
+        response_started = False
         try:
             payload = self.read_json()
             message = payload.get("message")
@@ -232,15 +282,29 @@ class AssistantHandler(BaseHTTPRequestHandler):
                 *safe_history,
                 {"role": "user", "content": message.strip()},
             ]
-            answer = generate_chat_response(
-                model,
-                [
-                    {"role": "system", "content": system},
-                    *conversation,
-                ],
-            )
+            messages = [
+                {"role": "system", "content": system},
+                *conversation,
+            ]
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache, no-transform")
+            self.send_header("X-Accel-Buffering", "no")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            response_started = True
+
+            answer_parts = []
+            for content in stream_chat_response(model, messages):
+                answer_parts.append(content)
+                self.send_stream_event("token", {"content": content})
+            answer = "".join(answer_parts)
             review = None
             if review_by_lisa and bot_id != "lisa":
+                self.send_stream_event(
+                    "status",
+                    {"message": "Lisa controleert het antwoord…"},
+                )
                 review = generate_chat_response(
                     model,
                     [
@@ -260,20 +324,32 @@ class AssistantHandler(BaseHTTPRequestHandler):
                         )},
                     ],
                 )
-            self.send_json(200, {
+            self.send_stream_event("done", {
                 "answer": answer,
                 "bot": bot_name.strip(),
                 "review": review,
                 "sources": list(dict.fromkeys(name for _, name, _ in matches)),
             })
         except ValueError as error:
-            self.send_json(400, {"error": str(error)})
+            if response_started:
+                self.send_stream_event("error", {"error": str(error)})
+            else:
+                self.send_json(400, {"error": str(error)})
         except (urllib.error.URLError, TimeoutError) as error:
-            self.send_json(502, {
-                "error": f"Kan Ollama niet bereiken: {error}. Controleer of Ollama draait en het model beschikbaar is."
-            })
+            message = (
+                f"Kan Ollama niet bereiken: {error}. "
+                "Controleer of Ollama draait en het model beschikbaar is."
+            )
+            if response_started:
+                self.send_stream_event("error", {"error": message})
+            else:
+                self.send_json(502, {"error": message})
         except (json.JSONDecodeError, RuntimeError) as error:
-            self.send_json(502, {"error": f"Ollama-verzoek mislukt: {error}"})
+            message = f"Ollama-verzoek mislukt: {error}"
+            if response_started:
+                self.send_stream_event("error", {"error": message})
+            else:
+                self.send_json(502, {"error": message})
 
     def transcribe(self):
         try:
@@ -323,6 +399,7 @@ class AssistantHandler(BaseHTTPRequestHandler):
                 {
                     "model": model,
                     "stream": False,
+                    "keep_alive": OLLAMA_KEEP_ALIVE,
                     "messages": [
                         {
                             "role": "system",

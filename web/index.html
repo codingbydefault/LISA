@@ -67,6 +67,14 @@
     .user { width: fit-content; max-width: 82%; margin-left: auto; background: var(--user-bubble); }
     .assistant { margin-right: 4%; }
     .error { color: #a32020; }
+    #thinking { display: flex; align-items: center; gap: 5px; width: fit-content; padding: 12px 16px; margin: 0 0 16px; color: var(--muted); font-size: .9rem; }
+    #thinking[hidden] { display: none; }
+    .thinking-dots { display: inline-flex; gap: 3px; margin-left: 2px; }
+    .thinking-dots span { width: 5px; height: 5px; border-radius: 50%; background: currentColor; animation: thinking-pulse 1.2s ease-in-out infinite; }
+    .thinking-dots span:nth-child(2) { animation-delay: .16s; }
+    .thinking-dots span:nth-child(3) { animation-delay: .32s; }
+    @keyframes thinking-pulse { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+    @media (prefers-reduced-motion: reduce) { .thinking-dots span { animation: none; } }
     #chat-form { width: min(78%, 960px); min-height: 66px; align-self: center; display: flex; gap: 10px; align-items: center; padding: 12px 12px 12px 21px; border: 1px solid var(--border); border-radius: 32px; box-shadow: 0 3px 12px var(--shadow); }
     #chat-form:focus-within { border-color: var(--muted); }
     #chat-form input { flex: 1; min-width: 0; border: 0; outline: 0; padding: 8px 0; }
@@ -153,6 +161,10 @@
           <button class="utility" type="button" data-prompt="Help me met een codevraag.">Help met coderen</button>
           <button class="utility" type="button" data-prompt="Maak een professioneel e-mailconcept over: ">Maak een e-mailconcept</button>
         </div>
+      </div>
+      <div id="thinking" role="status" aria-live="polite" hidden>
+        <span id="thinking-label">Lisa denkt na</span>
+        <span class="thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
       </div>
     </section>
     <form id="chat-form">
@@ -653,6 +665,7 @@
       }
       chat.append(bubble);
       chat.scrollTop = chat.scrollHeight;
+      return bubble;
     }
 
     async function refreshStatus() {
@@ -718,6 +731,13 @@
       input.value = "";
       sendButton.disabled = true;
       botSelect.disabled = true;
+      const thinking = document.querySelector("#thinking");
+      chat.append(thinking);
+      document.querySelector("#thinking-label").textContent = `${bot.name} denkt na`;
+      thinking.hidden = false;
+      thinking.scrollIntoView({ block: "nearest" });
+      sendButton.textContent = "…";
+      sendButton.setAttribute("aria-label", `${bot.name} denkt na`);
       try {
         const response = await fetch("/api/chat", {
           method: "POST",
@@ -732,24 +752,75 @@
             history: conversation.slice(-20).map(({ role, content }) => ({ role, content })),
           }),
         });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Verzoek mislukt.");
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Verzoek mislukt.");
+        }
+        if (!response.body) throw new Error("Streaming wordt niet ondersteund door deze browser.");
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let assistantBubble = null;
+        let answer = "";
+        let result = null;
+
+        const handleEvent = (line) => {
+          if (!line.trim()) return;
+          const streamEvent = JSON.parse(line);
+          if (streamEvent.type === "token") {
+            if (!assistantBubble) {
+              document.querySelector("#thinking").hidden = true;
+              assistantBubble = addBubble("assistant", "", [], null, bot.name);
+            }
+            answer += streamEvent.content;
+            assistantBubble.querySelector("div").textContent = answer;
+            chat.scrollTop = chat.scrollHeight;
+          } else if (streamEvent.type === "status") {
+            document.querySelector("#thinking-label").textContent = streamEvent.message;
+            chat.append(document.querySelector("#thinking"));
+            document.querySelector("#thinking").hidden = false;
+          } else if (streamEvent.type === "done") {
+            result = streamEvent;
+          } else if (streamEvent.type === "error") {
+            throw new Error(streamEvent.error || "Ollama-verzoek mislukt.");
+          } else {
+            throw new Error("Ongeldig antwoord ontvangen van de Lisa-server.");
+          }
+        };
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+          for (const line of lines) handleEvent(line);
+        }
+        buffer += decoder.decode();
+        if (buffer.trim()) handleEvent(buffer);
+        if (!result) throw new Error("De verbinding stopte voordat het antwoord compleet was.");
+        answer = result.answer;
+        if (!assistantBubble) assistantBubble = addBubble("assistant", answer, [], null, bot.name);
+        assistantBubble.querySelector("div").textContent = answer;
         conversation.push(
           { role: "user", content: message },
           {
             role: "assistant",
-            content: data.answer,
-            sources: data.sources,
-            review: data.review,
+            content: result.answer,
+            sources: result.sources,
+            review: result.review,
             botName: bot.name,
           },
         );
         renderConversation();
-        if (document.querySelector("#voice-output").checked) speakAnswer(data.answer);
+        if (document.querySelector("#voice-output").checked) speakAnswer(result.answer);
       } catch (error) {
         addBubble("assistant error", error.message);
       } finally {
+        document.querySelector("#thinking").hidden = true;
         sendButton.disabled = false;
+        sendButton.textContent = "↑";
+        sendButton.setAttribute("aria-label", "Verstuur bericht");
         botSelect.disabled = false;
         input.focus();
       }
