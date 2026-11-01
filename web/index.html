@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lisa — Limited Incorporated</title>
+  <script>
+    try {
+      document.documentElement.dataset.theme = localStorage.getItem("lisa-theme") || "dark";
+    } catch {
+      document.documentElement.dataset.theme = "dark";
+    }
+  </script>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      --page: #212121;
+      --surface: #2b2b2b;
+      --surface-hover: #383838;
+      --text: #ececec;
+      --muted: #a1a1aa;
+      --border: #454545;
+      --user-bubble: #303030;
+      --accent: #ececec;
+      --accent-text: #202123;
+      --shadow: #00000030;
+      background: var(--page);
+      color: var(--text);
+    }
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --page: #fff;
+      --surface: #fff;
+      --surface-hover: #f4f4f4;
+      --text: #202123;
+      --muted: #73777d;
+      --border: #d9d9e3;
+      --user-bubble: #f4f4f4;
+      --accent: #202123;
+      --accent-text: #fff;
+      --shadow: #0000000a;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    main { width: 100%; min-height: 100vh; margin: 0; display: flex; flex-direction: column; padding: 22px clamp(16px, 2.5vw, 40px) 18px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 11px; }
+    .brand-mark { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-text); font-weight: 700; }
+    h1 { margin: 0; font-size: 1.1rem; letter-spacing: -.02em; }
+    .subtitle, .muted, #status { color: var(--muted); font-size: .84rem; }
+    .top-controls { display: flex; align-items: center; gap: 8px; }
+    label { display: grid; gap: 6px; font-size: .9rem; }
+    select, input, button, textarea { font: inherit; border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; background: var(--surface); color: var(--text); }
+    select { max-width: 220px; }
+    button { cursor: pointer; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .status-line { min-height: 20px; margin: 12px 0 0; text-align: right; }
+    #chat { flex: 1; min-height: 320px; max-height: calc(100vh - 300px); overflow-y: auto; padding: 20px 8px; }
+    #welcome { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px 0; }
+    #welcome h2 { margin: 0 0 9px; font-size: clamp(1.7rem, 5vw, 2.2rem); font-weight: 600; letter-spacing: -.04em; }
+    #welcome p { margin: 0; color: var(--muted); }
+    .suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; margin-top: 25px; }
+    .suggestions button { border-radius: 999px; background: var(--surface); color: var(--text); }
+    .suggestions button:hover, .utility:hover { background: var(--surface-hover); }
+    .bubble { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px 16px; margin: 0 0 16px; border-radius: 18px; line-height: 1.6; }
+    .user { width: fit-content; max-width: 82%; margin-left: auto; background: var(--user-bubble); }
+    .assistant { margin-right: 4%; }
+    .error { color: #a32020; }
+    #chat-form { width: min(78%, 960px); min-height: 66px; align-self: center; display: flex; gap: 10px; align-items: center; padding: 12px 12px 12px 21px; border: 1px solid var(--border); border-radius: 32px; box-shadow: 0 3px 12px var(--shadow); }
+    #chat-form:focus-within { border-color: var(--muted); }
+    #chat-form input { flex: 1; min-width: 0; border: 0; outline: 0; padding: 8px 0; }
+    #chat-form .voice-button { flex: 0 0 42px; width: 42px; height: 42px; padding: 0; border-radius: 50%; background: var(--surface-hover); border-color: transparent; }
+    #chat-form .voice-button.listening { background: #bd3434; color: white; }
+    #send { border: 0; border-radius: 50%; width: 40px; height: 40px; padding: 0; background: var(--accent); color: var(--accent-text); font-size: 1.2rem; }
+    .privacy-note { margin: 9px 0 13px; text-align: center; color: var(--muted); font-size: .75rem; line-height: 1.7; }
+    .privacy-note label { display: inline-flex; align-items: center; gap: 5px; }
+    details { border-top: 1px solid var(--border); padding: 13px 2px; }
+    details summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+    .expert-settings { border-top: 0; padding: 12px 0; }
+    .expert-options { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+    .bot-dot { display: inline-block; flex: 0 0 12px; width: 12px; height: 12px; border-radius: 50%; background: var(--bot-color, #202123); }
+    .bot-name { display: block; margin-bottom: 5px; font-size: .78rem; font-weight: 650; color: var(--muted); }
+    .review-note { margin: 8px 0 12px; color: var(--muted); font-size: .84rem; }
+    #bot-dialog { width: min(520px, calc(100% - 28px)); border: 1px solid var(--border); border-radius: 16px; padding: 22px; background: var(--page); color: var(--text); box-shadow: 0 18px 70px var(--shadow); }
+    #bot-dialog::backdrop { background: #20212366; }
+    #bot-form { display: grid; gap: 14px; }
+    #bot-form input, #bot-form textarea { width: 100%; }
+    #bot-form textarea { min-height: 130px; resize: vertical; font: inherit; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+    .utility { background: var(--surface); color: var(--text); }
+    .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 12px; }
+    .color-choices { display: flex; gap: 9px; }
+    .color-choice { width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--border); }
+    .color-choice[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); }
+    .voice-status { margin: 10px 0; color: var(--muted); font-size: .86rem; }
+    .recording { color: #a32020; font-weight: 700; }
+    .transcript-row { display: flex; gap: 9px; align-items: start; padding: 9px 0; border-top: 1px solid var(--border); }
+    .transcript-row input { margin-top: 4px; }
+    .timestamp { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #transcript { max-height: 280px; overflow-y: auto; margin-top: 10px; }
+    #summary { white-space: pre-wrap; line-height: 1.5; margin-top: 12px; }
+    .consent { display: flex; grid-template-columns: auto 1fr; align-items: start; }
+    #documents { margin: 8px 0 0; padding-left: 20px; font-size: .9rem; }
+    @media (max-width: 600px) {
+      main { width: 100%; padding-top: 14px; }
+      .topbar { align-items: flex-start; }
+      .top-controls { flex-direction: column; align-items: stretch; }
+      .top-controls select { max-width: min(220px, 52vw); }
+      #chat { min-height: 280px; }
+      #chat-form { width: 100%; min-height: 60px; padding: 9px 9px 9px 16px; }
+      .user, .assistant { max-width: 96%; margin-right: 0; }
+      .suggestions { gap: 7px; }
+      .suggestions button { font-size: .82rem; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">L</div>
+        <div>
+          <h1 id="current-bot-name">Lisa</h1>
+          <div id="bot-subtitle" class="subtitle">Limited Incorporated · System Analyst</div>
+        </div>
+      </div>
+      <div class="top-controls">
+        <button id="theme-toggle" class="utility" type="button" aria-label="Schakel naar licht thema">☀ Licht</button>
+        <select id="model" aria-label="Ollama-model"></select>
+        <span id="active-bot-dot" class="bot-dot" aria-hidden="true"></span>
+        <select id="bot-select" aria-label="Kies bot"></select>
+        <button id="new-bot" class="utility" type="button" aria-label="Nieuwe bot">+</button>
+        <button id="edit-bot" class="utility" type="button" aria-label="Bot aanpassen">Aanpassen</button>
+      </div>
+    </header>
+    <div id="status" class="status-line" role="status">Ollama controleren…</div>
+    <details class="expert-settings">
+      <summary>Controle door Lisa</summary>
+      <label class="expert-options">
+        <input id="review-by-lisa" type="checkbox">
+        Laat Lisa het antwoord van de gekozen bot controleren
+      </label>
+      <div class="review-note">De bot antwoordt eerst zelf. Lisa's controle verschijnt apart onder het antwoord.</div>
+    </details>
+    <section id="chat" aria-live="polite" aria-label="Gesprek">
+      <div id="welcome">
+        <h2>Waar kan ik je mee helpen?</h2>
+        <p>Ik ben Lisa, jouw lokale system analyst.</p>
+        <div class="suggestions" aria-label="Voorbeeldvragen">
+          <button class="utility" type="button" data-prompt="Help me een technisch probleem analyseren.">Analyseer een probleem</button>
+          <button class="utility" type="button" data-prompt="Help me met een codevraag.">Help met coderen</button>
+          <button class="utility" type="button" data-prompt="Maak een professioneel e-mailconcept over: ">Maak een e-mailconcept</button>
+        </div>
+      </div>
+    </section>
+    <form id="chat-form">
+      <input id="message" autocomplete="off" placeholder="Vraag Lisa iets…" aria-label="Bericht">
+      <button id="voice-input" class="voice-button" type="button" aria-label="Start spraakbericht" title="Spreek een bericht in" disabled>🎙</button>
+      <button id="send" type="submit" aria-label="Verstuur bericht">↑</button>
+    </form>
+    <div class="privacy-note">
+      <label><input id="voice-output" type="checkbox"> Lees antwoorden hardop voor</label>
+      <span> · </span>
+      <span id="voice-chat-status" role="status">Spraak lokaal beschikbaar na installatie van Whisper.</span>
+      <br>Lisa kan fouten maken. Controleer belangrijke informatie.
+    </div>
+    <details>
+      <summary>Gespreksnotities en dagoverzicht</summary>
+      <p class="muted">De microfoon start pas na jouw klik. Audio wordt alleen tijdelijk verwerkt voor lokale transcriptie en niet opgeslagen. Transcript en selectie blijven alleen in deze open pagina; sluiten of verversen wist ze.</p>
+      <label class="consent">
+        <input id="consent" type="checkbox">
+        <span>Ik heb de aanwezigen geïnformeerd en toestemming gekregen om dit gesprek op te nemen.</span>
+      </label>
+      <div class="controls" style="margin-top: 12px">
+        <button id="record-start" class="utility" type="button" disabled>Start luisteren</button>
+        <button id="mark-moment" class="utility" type="button" disabled>Markeer moment</button>
+        <button id="record-stop" class="utility" type="button" disabled>Stop</button>
+        <button id="summarize" class="utility" type="button" disabled>Vat selectie samen</button>
+      </div>
+      <div id="voice-status" class="voice-status" role="status">Geen opname actief.</div>
+      <div id="markers" class="muted"></div>
+      <div id="transcript" aria-live="polite"></div>
+      <div id="summary" aria-live="polite"></div>
+    </details>
+    <details>
+      <summary>Eigen documenten en kennis</summary>
+      <p class="muted">Alleen .txt en .md, maximaal 1 MB per bestand. Bestanden blijven in de map <code>knowledge</code>.</p>
+      <div class="controls">
+        <input id="file" type="file" accept=".txt,.md,text/plain,text/markdown">
+        <button id="upload" class="utility" type="button">Document toevoegen</button>
+      </div>
+      <ul id="documents"></ul>
+    </details>
+  </main>
+  <dialog id="bot-dialog">
+    <form id="bot-form">
+      <h2 id="bot-dialog-title">Nieuwe bot</h2>
+      <label>Naam
+        <input id="create-bot-name" maxlength="50" required placeholder="Bijvoorbeeld: Research Lisa">
+      </label>
+      <div>
+        <label>Kleur</label>
+        <div class="color-choices" role="group" aria-label="Botkleur">
+          <button class="color-choice" type="button" data-color="#2673dd" aria-label="Blauw" aria-pressed="true" style="background:#2673dd"></button>
+          <button class="color-choice" type="button" data-color="#27825b" aria-label="Groen" aria-pressed="false" style="background:#27825b"></button>
+          <button class="color-choice" type="button" data-color="#8a56c2" aria-label="Paars" aria-pressed="false" style="background:#8a56c2"></button>
+          <button class="color-choice" type="button" data-color="#d16b27" aria-label="Oranje" aria-pressed="false" style="background:#d16b27"></button>
+          <button class="color-choice" type="button" data-color="#c3465b" aria-label="Rood" aria-pressed="false" style="background:#c3465b"></button>
+          <button class="color-choice" type="button" data-color="#16858a" aria-label="Turquoise" aria-pressed="false" style="background:#16858a"></button>
+        </div>
+      </div>
+      <label>Eerste prompt — hiermee bepaal je de functie van deze bot
+        <textarea id="bot-instructions" maxlength="4000" required placeholder="Je bent een onderzoeksassistent. Onderzoek vragen zorgvuldig, scheid feiten van aannames en geef aan wat nog gecontroleerd moet worden."></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button id="cancel-bot" class="utility" type="button">Annuleren</button>
+        <button id="save-bot" class="primary" type="submit">Bot opslaan</button>
+      </div>
+    </form>
+  </dialog>
+  <script>
+    const transcriptSegments = [];
+    const markers = [];
+    const chat = document.querySelector("#chat");
+    const model = document.querySelector("#model");
+    const status = document.querySelector("#status");
+    const sendButton = document.querySelector("#send");
+    const voiceStatus = document.querySelector("#voice-status");
+    const botSelect = document.querySelector("#bot-select");
+    const botDialog = document.querySelector("#bot-dialog");
+    const botForm = document.querySelector("#bot-form");
+    const themeToggle = document.querySelector("#theme-toggle");
+    const botColors = ["#2673dd", "#27825b", "#8a56c2", "#d16b27", "#c3465b", "#16858a"];
+    const initialBots = [{
+      id: "lisa",
+      name: "Lisa",
+      color: "#202123",
+      instructions: "Je bent Lisa, de system analyst van Limited Incorporated. Help met systeemanalyse, requirements, technisch onderzoek en heldere communicatie.",
+    }];
+    let bots = initialBots;
+    let botChats = { lisa: [] };
+    let activeBotId = "lisa";
+    let editingBotId = null;
+    let selectedBotColor = botColors[0];
+    let speechAvailable = false;
+    let voiceChatRecording = false;
+    let voiceChatStream;
+    let voiceChatContext;
+    let voiceChatSource;
+    let voiceChatProcessor;
+    let voiceChatGain;
+    let voiceChatParts = [];
+    let voiceChatBufferedSamples = 0;
+    let voiceChatSentSamples = 0;
+    let voiceChatQueue = Promise.resolve();
+    let voiceChatSegments = [];
+    let voiceChatError = null;
+    let recording = false;
+    let micStream;
+    let audioContext;
+    let audioSource;
+    let processor;
+    let silentGain;
+    let audioParts = [];
+    let bufferedSamples = 0;
+    let totalSamples = 0;
+    let sentSamples = 0;
+    let transcriptionQueue = Promise.resolve();
+
+    function updateThemeControl() {
+      const dark = document.documentElement.dataset.theme !== "light";
+      themeToggle.textContent = dark ? "☀ Licht" : "☾ Donker";
+      themeToggle.setAttribute(
+        "aria-label",
+        dark ? "Schakel naar licht thema" : "Schakel naar donker thema",
+      );
+    }
+
+    themeToggle.addEventListener("click", () => {
+      const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = theme;
+      updateThemeControl();
+      try {
+        localStorage.setItem("lisa-theme", theme);
+      } catch (error) {
+        status.textContent = `Themakeuze kan niet lokaal worden opgeslagen: ${error.message}`;
+      }
+    });
+
+    updateThemeControl();
+
+    function speakAnswer(text) {
+      if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+        status.textContent = "Hardop voorlezen wordt niet ondersteund door deze browser.";
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      const dutchVoice = window.speechSynthesis.getVoices()
+        .find((voice) => voice.lang.toLowerCase().startsWith("nl"));
+      if (dutchVoice) utterance.voice = dutchVoice;
+      utterance.lang = dutchVoice?.lang || "nl-NL";
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function takeVoiceSamples(count) {
+      const output = new Float32Array(count);
+      let written = 0;
+      while (written < count) {
+        const part = voiceChatParts[0];
+        const take = Math.min(part.length, count - written);
+        output.set(part.subarray(0, take), written);
+        written += take;
+        if (take === part.length) voiceChatParts.shift();
+        else voiceChatParts[0] = part.subarray(take);
+      }
+      voiceChatBufferedSamples -= count;
+      const offset = voiceChatSentSamples / voiceChatContext.sampleRate;
+      voiceChatSentSamples += count;
+      return { output, offset };
+    }
+
+    function queueVoiceSamples(count) {
+      const { output, offset } = takeVoiceSamples(count);
+      const sampleRate = voiceChatContext.sampleRate;
+      voiceChatQueue = voiceChatQueue.then(async () => {
+        const response = await fetch("/api/transcribe", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/octet-stream",
+            "X-Sample-Rate": String(sampleRate),
+            "X-Offset": String(offset),
+          },
+          body: output.buffer,
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Lokale transcriptie mislukt.");
+        voiceChatSegments.push(...data.segments);
+        document.querySelector("#voice-chat-status").textContent =
+          `Luistert lokaal… ${formatTime(voiceChatSentSamples / sampleRate)}`;
+      }).catch((error) => {
+        voiceChatError = error;
+        document.querySelector("#voice-chat-status").textContent = error.message;
+      });
+    }
+
+    function flushVoiceSamples(all = false) {
+      const chunkSize = Math.floor(voiceChatContext.sampleRate * 8);
+      while (voiceChatBufferedSamples >= chunkSize ||
+        (all && voiceChatBufferedSamples >= voiceChatContext.sampleRate / 2)) {
+        queueVoiceSamples(Math.min(voiceChatBufferedSamples, chunkSize));
+      }
+      if (all) {
+        voiceChatParts = [];
+        voiceChatBufferedSamples = 0;
+      }
+    }
+
+    async function startVoiceMessage() {
+      if (!speechAvailable) {
+        document.querySelector("#voice-chat-status").textContent =
+          "Installeer eerst Whisper met: pip install -r requirements.txt";
+        return;
+      }
+      try {
+        voiceChatStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        voiceChatContext = new AudioContext();
+        await voiceChatContext.resume();
+        voiceChatSource = voiceChatContext.createMediaStreamSource(voiceChatStream);
+        voiceChatProcessor = voiceChatContext.createScriptProcessor(4096, 1, 1);
+        voiceChatGain = voiceChatContext.createGain();
+        voiceChatGain.gain.value = 0;
+        voiceChatParts = [];
+        voiceChatBufferedSamples = 0;
+        voiceChatSentSamples = 0;
+        voiceChatSegments = [];
+        voiceChatError = null;
+        voiceChatQueue = Promise.resolve();
+        voiceChatProcessor.onaudioprocess = (event) => {
+          if (!voiceChatRecording) return;
+          const samples = event.inputBuffer.getChannelData(0).slice();
+          voiceChatParts.push(samples);
+          voiceChatBufferedSamples += samples.length;
+          if (voiceChatBufferedSamples >= voiceChatContext.sampleRate * 8) flushVoiceSamples();
+        };
+        voiceChatSource.connect(voiceChatProcessor);
+        voiceChatProcessor.connect(voiceChatGain);
+        voiceChatGain.connect(voiceChatContext.destination);
+        voiceChatRecording = true;
+        const button = document.querySelector("#voice-input");
+        button.textContent = "■";
+        button.classList.add("listening");
+        button.setAttribute("aria-label", "Stop spraakbericht");
+        document.querySelector("#voice-chat-status").textContent =
+          "Microfoon actief. Spreek je vraag in en druk op stop.";
+      } catch (error) {
+        voiceChatStream?.getTracks().forEach((track) => track.stop());
+        document.querySelector("#voice-chat-status").textContent =
+          `Microfoon starten mislukt: ${error.message}`;
+      }
+    }
+
+    async function stopVoiceMessage() {
+      if (!voiceChatRecording) return;
+      voiceChatRecording = false;
+      voiceChatProcessor.disconnect();
+      voiceChatSource.disconnect();
+      voiceChatGain.disconnect();
+      voiceChatStream.getTracks().forEach((track) => track.stop());
+      flushVoiceSamples(true);
+      const button = document.querySelector("#voice-input");
+      button.textContent = "🎙";
+      button.classList.remove("listening");
+      button.setAttribute("aria-label", "Start spraakbericht");
+      document.querySelector("#voice-chat-status").textContent = "Spraak wordt lokaal uitgeschreven…";
+      try {
+        await voiceChatQueue;
+        await voiceChatContext.close();
+        if (voiceChatError) throw voiceChatError;
+        const transcript = voiceChatSegments.map((segment) => segment.text).join(" ").trim();
+        if (!transcript) {
+          document.querySelector("#voice-chat-status").textContent = "Geen spraak herkend. Probeer het opnieuw.";
+          return;
+        }
+        document.querySelector("#message").value = transcript;
+        document.querySelector("#voice-chat-status").textContent =
+          "Transcript klaar — controleer of bewerk de tekst en verstuur hem wanneer je wilt.";
+        document.querySelector("#message").focus();
+      } catch (error) {
+        document.querySelector("#voice-chat-status").textContent = error.message;
+      }
+    }
+
+    document.querySelector("#voice-input").addEventListener("click", () => {
+      if (voiceChatRecording) stopVoiceMessage();
+      else startVoiceMessage();
+    });
+
+    document.querySelector("#voice-output").addEventListener("change", (event) => {
+      try {
+        localStorage.setItem("lisa-voice-output", String(event.target.checked));
+      } catch (error) {
+        status.textContent = `Voorleeskeuze kan niet lokaal worden opgeslagen: ${error.message}`;
+      }
+      if (!event.target.checked && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    });
+
+    try {
+      document.querySelector("#voice-output").checked =
+        localStorage.getItem("lisa-voice-output") === "true";
+    } catch (error) {
+      status.textContent = `Voorleeskeuze laden mislukt: ${error.message}`;
+    }
+
+    function loadBotProfiles() {
+      try {
+        const stored = localStorage.getItem("lisa-bot-profiles");
+        if (stored === null) return initialBots.map((bot) => ({ ...bot }));
+        const parsed = JSON.parse(stored);
+        if (
+          !Array.isArray(parsed) || parsed.length === 0 || parsed.length > 20 ||
+          parsed.some((bot) =>
+            !bot || typeof bot.id !== "string" ||
+            typeof bot.name !== "string" || !bot.name.trim() ||
+            typeof bot.color !== "string" || !/^#[0-9a-f]{6}$/i.test(bot.color) ||
+            typeof bot.instructions !== "string" || !bot.instructions.trim()
+          ) || new Set(parsed.map((bot) => bot.id)).size !== parsed.length
+        ) {
+          throw new Error("Botprofielen hebben een ongeldig formaat.");
+        }
+        return parsed;
+      } catch (error) {
+        status.textContent = `Botprofielen laden mislukt; alleen Lisa is beschikbaar: ${error.message}`;
+        return initialBots.map((bot) => ({ ...bot }));
+      }
+    }
+
+    bots = loadBotProfiles();
+    botChats = Object.fromEntries(bots.map((bot) => [bot.id, []]));
+
+    function saveBotProfiles() {
+      try {
+        localStorage.setItem("lisa-bot-profiles", JSON.stringify(bots));
+      } catch (error) {
+        throw new Error(`Botprofiel lokaal opslaan mislukt: ${error.message}`);
+      }
+    }
+
+    function currentBot() {
+      return bots.find((bot) => bot.id === activeBotId) || bots[0];
+    }
+
+    function updateBotChrome() {
+      const bot = currentBot();
+      activeBotId = bot.id;
+      botSelect.value = bot.id;
+      document.querySelector("#active-bot-dot").style.setProperty("--bot-color", bot.color);
+      const brandMark = document.querySelector(".brand-mark");
+      brandMark.style.background = bot.color;
+      brandMark.textContent = bot.name.trim().charAt(0).toUpperCase();
+      document.querySelector("#current-bot-name").textContent = bot.name;
+      document.querySelector("#bot-subtitle").textContent =
+        bot.id === "lisa" ? "Limited Incorporated · System Analyst" : "Jouw lokale assistent";
+      document.querySelector("#message").placeholder = `Vraag ${bot.name} iets…`;
+      document.querySelector("#review-by-lisa").disabled = bot.id === "lisa";
+      if (bot.id === "lisa") document.querySelector("#review-by-lisa").checked = false;
+      const welcome = document.querySelector("#welcome");
+      welcome.querySelector("h2").textContent = `Waar kan ${bot.name} je mee helpen?`;
+      welcome.querySelector("p").textContent = `Je chat lokaal met ${bot.name}.`;
+    }
+
+    function renderBotSelect() {
+      botSelect.replaceChildren();
+      for (const bot of bots) {
+        const option = document.createElement("option");
+        option.value = bot.id;
+        option.textContent = bot.name;
+        botSelect.append(option);
+      }
+      updateBotChrome();
+    }
+
+    function renderConversation() {
+      for (const bubble of chat.querySelectorAll(".bubble")) bubble.remove();
+      const conversation = botChats[activeBotId] || [];
+      document.querySelector("#welcome").hidden = conversation.length > 0;
+      updateBotChrome();
+      for (const item of conversation) {
+        addBubble(item.role, item.content, item.sources || [], item.review || null, item.botName || null);
+      }
+    }
+
+    function formatTime(seconds) {
+      const whole = Math.max(0, Math.floor(seconds));
+      return [Math.floor(whole / 3600), Math.floor((whole % 3600) / 60), whole % 60]
+        .map((part) => String(part).padStart(2, "0")).join(":");
+    }
+
+    function renderTranscript() {
+      const container = document.querySelector("#transcript");
+      container.replaceChildren();
+      for (const [index, segment] of transcriptSegments.entries()) {
+        const row = document.createElement("label");
+        row.className = "transcript-row";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = segment.selected;
+        checkbox.addEventListener("change", () => { segment.selected = checkbox.checked; });
+        const time = document.createElement("span");
+        time.className = "timestamp";
+        time.textContent = `${formatTime(segment.start)}–${formatTime(segment.end)}`;
+        const text = document.createElement("span");
+        text.textContent = segment.text;
+        row.append(checkbox, time, text);
+        container.append(row);
+      }
+      document.querySelector("#summarize").disabled =
+        recording || !transcriptSegments.some((segment) => segment.selected);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function addTranscribedSegments(segments) {
+      for (const segment of segments) {
+        const selected = markers.some((time) => segment.start <= time + 30 && segment.end >= time - 30);
+        transcriptSegments.push({ ...segment, selected });
+      }
+      renderTranscript();
+    }
+
+    function takeAudioSamples(count) {
+      const output = new Float32Array(count);
+      let written = 0;
+      while (written < count) {
+        const part = audioParts[0];
+        const take = Math.min(part.length, count - written);
+        output.set(part.subarray(0, take), written);
+        written += take;
+        if (take === part.length) audioParts.shift();
+        else audioParts[0] = part.subarray(take);
+      }
+      bufferedSamples -= count;
+      const offset = sentSamples / audioContext.sampleRate;
+      sentSamples += count;
+      return { output, offset };
+    }
+
+    function queueAudio(count) {
+      const { output, offset } = takeAudioSamples(count);
+      const sampleRate = audioContext.sampleRate;
+      transcriptionQueue = transcriptionQueue.then(async () => {
+        const response = await fetch("/api/transcribe", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/octet-stream",
+            "X-Sample-Rate": String(sampleRate),
+            "X-Offset": String(offset),
+          },
+          body: output.buffer,
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Transcriptie mislukt.");
+        addTranscribedSegments(data.segments);
+        voiceStatus.textContent = data.segments.length
+          ? `Lokaal getranscribeerd tot ${formatTime(sentSamples / sampleRate)}.`
+          : `Geen verstaanbare spraak tot ${formatTime(sentSamples / sampleRate)}.`;
+      }).catch((error) => {
+        voiceStatus.textContent = `Transcriptieprobleem: ${error.message}`;
+      });
+    }
+
+    function flushAudio(all = false) {
+      const chunkSize = Math.floor(audioContext.sampleRate * 12);
+      while (bufferedSamples >= chunkSize || (all && bufferedSamples >= audioContext.sampleRate / 2)) {
+        queueAudio(all ? Math.min(bufferedSamples, chunkSize) : chunkSize);
+      }
+      if (all) {
+        audioParts = [];
+        bufferedSamples = 0;
+      }
+    }
+
+    function addBubble(role, text, sources = [], review = null, botName = null) {
+      document.querySelector("#welcome").hidden = true;
+      const bubble = document.createElement("div");
+      bubble.className = `bubble ${role}`;
+      if (role === "assistant" && botName) {
+        const label = document.createElement("span");
+        label.className = "bot-name";
+        label.textContent = botName;
+        bubble.append(label);
+      }
+      const body = document.createElement("div");
+      body.textContent = text;
+      bubble.append(body);
+      if (review) {
+        const reviewNote = document.createElement("details");
+        reviewNote.className = "review-note";
+        const heading = document.createElement("summary");
+        heading.textContent = "Lisa's controle";
+        const content = document.createElement("div");
+        content.textContent = review;
+        reviewNote.append(heading, content);
+        bubble.append(reviewNote);
+      }
+      if (sources.length) {
+        const source = document.createElement("small");
+        source.textContent = `Bronnen: ${sources.join(", ")}`;
+        bubble.append(document.createElement("br"), source);
+      }
+      chat.append(bubble);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function refreshStatus() {
+      try {
+        const response = await fetch("/api/status");
+        const data = await response.json();
+        speechAvailable = data.speechAvailable;
+        model.replaceChildren();
+        for (const name of data.models) {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name;
+          model.append(option);
+        }
+        status.textContent = data.ollama
+          ? `${data.models.length} lokaal model${data.models.length === 1 ? "" : "len"} beschikbaar.`
+          : `Ollama niet bereikbaar: ${data.error}`;
+        if (data.ollama && !data.models.length) {
+          status.textContent = "Ollama draait, maar er zijn nog geen modellen geïnstalleerd.";
+        }
+        document.querySelector("#record-start").disabled =
+          !speechAvailable || !document.querySelector("#consent").checked || recording;
+        document.querySelector("#voice-input").disabled = !speechAvailable;
+        if (speechAvailable) {
+          document.querySelector("#voice-chat-status").textContent =
+            "Spraak wordt lokaal herkend met Whisper.";
+        } else {
+          document.querySelector("#voice-chat-status").textContent =
+            "Installeer Whisper met: pip install -r requirements.txt";
+        }
+        if (!speechAvailable) {
+          voiceStatus.textContent = "Installeer eerst lokale spraakherkenning met: pip install -r requirements.txt";
+        }
+      } catch (error) {
+        status.textContent = `Status controleren mislukt: ${error.message}`;
+      }
+    }
+
+    async function refreshDocuments() {
+      const response = await fetch("/api/documents");
+      const data = await response.json();
+      const list = document.querySelector("#documents");
+      list.replaceChildren();
+      for (const doc of data.documents) {
+        const item = document.createElement("li");
+        item.textContent = `${doc.name} (${Math.ceil(doc.size / 1024)} KB)`;
+        list.append(item);
+      }
+    }
+
+    document.querySelector("#chat-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = document.querySelector("#message");
+      const message = input.value.trim();
+      if (!message) return;
+      if (!model.value) {
+        addBubble("assistant error", "Installeer eerst een model in Ollama en ververs de pagina.");
+        return;
+      }
+      const bot = currentBot();
+      const conversation = botChats[bot.id];
+      addBubble("user", message);
+      input.value = "";
+      sendButton.disabled = true;
+      botSelect.disabled = true;
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message,
+            model: model.value,
+            botId: bot.id,
+            botName: bot.name,
+            instructions: bot.instructions,
+            reviewByLisa: document.querySelector("#review-by-lisa").checked,
+            history: conversation.slice(-20).map(({ role, content }) => ({ role, content })),
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Verzoek mislukt.");
+        conversation.push(
+          { role: "user", content: message },
+          {
+            role: "assistant",
+            content: data.answer,
+            sources: data.sources,
+            review: data.review,
+            botName: bot.name,
+          },
+        );
+        renderConversation();
+        if (document.querySelector("#voice-output").checked) speakAnswer(data.answer);
+      } catch (error) {
+        addBubble("assistant error", error.message);
+      } finally {
+        sendButton.disabled = false;
+        botSelect.disabled = false;
+        input.focus();
+      }
+    });
+
+    function openBotDialog(bot = null) {
+      if (!bot && bots.length >= 20) {
+        status.textContent = "Je kunt maximaal 20 botprofielen maken.";
+        return;
+      }
+      editingBotId = bot ? bot.id : null;
+      document.querySelector("#bot-dialog-title").textContent =
+        bot ? `${bot.name} aanpassen` : "Nieuwe bot";
+      document.querySelector("#create-bot-name").value = bot?.name || "";
+      document.querySelector("#bot-instructions").value = bot?.instructions || "";
+      selectedBotColor = bot?.color || botColors[0];
+      document.querySelectorAll(".color-choice").forEach((choice) => {
+        choice.setAttribute("aria-pressed", String(choice.dataset.color === selectedBotColor));
+      });
+      document.querySelector("#save-bot").textContent = bot ? "Wijzigingen opslaan" : "Bot maken";
+      botDialog.showModal();
+      document.querySelector("#create-bot-name").focus();
+    }
+
+    document.querySelector("#new-bot").addEventListener("click", () => openBotDialog());
+    document.querySelector("#edit-bot").addEventListener("click", () => openBotDialog(currentBot()));
+    document.querySelector("#cancel-bot").addEventListener("click", () => botDialog.close());
+    botDialog.addEventListener("click", (event) => {
+      if (event.target === botDialog) botDialog.close();
+    });
+    document.querySelectorAll(".color-choice").forEach((choice) => {
+      choice.addEventListener("click", () => {
+        selectedBotColor = choice.dataset.color;
+        document.querySelectorAll(".color-choice").forEach((item) => {
+          item.setAttribute("aria-pressed", String(item === choice));
+        });
+      });
+    });
+    botForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const name = document.querySelector("#create-bot-name").value.trim();
+      const instructions = document.querySelector("#bot-instructions").value.trim();
+      const previousBots = bots.map((bot) => ({ ...bot }));
+      let createdBotId = null;
+      if (editingBotId) {
+        bots = bots.map((bot) => bot.id === editingBotId
+          ? { ...bot, name, color: selectedBotColor, instructions }
+          : bot);
+      } else {
+        createdBotId = `bot_${crypto.randomUUID()}`;
+        bots.push({ id: createdBotId, name, color: selectedBotColor, instructions });
+        botChats[createdBotId] = [];
+        activeBotId = createdBotId;
+      }
+      try {
+        saveBotProfiles();
+      } catch (error) {
+        bots = previousBots;
+        if (createdBotId) {
+          delete botChats[createdBotId];
+          activeBotId = previousBots[0].id;
+        }
+        status.textContent = error.message;
+        return;
+      }
+      botDialog.close();
+      renderBotSelect();
+      renderConversation();
+      status.textContent = `${name} is klaar. De botfunctie is lokaal opgeslagen in deze browser.`;
+    });
+
+    botSelect.addEventListener("change", () => {
+      activeBotId = botSelect.value;
+      renderConversation();
+    });
+
+    document.querySelectorAll("[data-prompt]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const input = document.querySelector("#message");
+        input.value = button.dataset.prompt;
+        input.focus();
+      });
+    });
+
+    document.querySelector("#consent").addEventListener("change", (event) => {
+      document.querySelector("#record-start").disabled = !speechAvailable || !event.target.checked || recording;
+    });
+
+    document.querySelector("#record-start").addEventListener("click", async () => {
+      if (!speechAvailable || !document.querySelector("#consent").checked) return;
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new AudioContext();
+        await audioContext.resume();
+        audioSource = audioContext.createMediaStreamSource(micStream);
+        processor = audioContext.createScriptProcessor(4096, 1, 1);
+        silentGain = audioContext.createGain();
+        silentGain.gain.value = 0;
+        audioSource.connect(processor);
+        processor.connect(silentGain);
+        silentGain.connect(audioContext.destination);
+        processor.onaudioprocess = (event) => {
+          if (!recording) return;
+          const samples = event.inputBuffer.getChannelData(0).slice();
+          audioParts.push(samples);
+          bufferedSamples += samples.length;
+          totalSamples += samples.length;
+          if (bufferedSamples >= audioContext.sampleRate * 12) flushAudio();
+        };
+        audioParts = [];
+        bufferedSamples = 0;
+        totalSamples = 0;
+        sentSamples = 0;
+        recording = true;
+        document.querySelector("#record-start").disabled = true;
+        document.querySelector("#mark-moment").disabled = false;
+        document.querySelector("#record-stop").disabled = false;
+        document.querySelector("#summarize").disabled = true;
+        document.querySelector("#summary").textContent = "";
+        voiceStatus.textContent = "Microfoon actief — lokaal luisteren. Druk op Stop om te beëindigen.";
+        voiceStatus.classList.add("recording");
+      } catch (error) {
+        voiceStatus.textContent = `Microfoon starten mislukt: ${error.message}`;
+      }
+    });
+
+    document.querySelector("#mark-moment").addEventListener("click", () => {
+      if (!recording || !audioContext) return;
+      const time = totalSamples / audioContext.sampleRate;
+      markers.push(time);
+      const marker = document.createElement("span");
+      marker.textContent = `${markers.length === 1 ? "" : " · "}Moment ${markers.length}: ${formatTime(time)}`;
+      document.querySelector("#markers").append(marker);
+      for (const segment of transcriptSegments) {
+        if (segment.start <= time + 30 && segment.end >= time - 30) segment.selected = true;
+      }
+      renderTranscript();
+    });
+
+    document.querySelector("#record-stop").addEventListener("click", async () => {
+      if (!recording) return;
+      recording = false;
+      processor.disconnect();
+      audioSource.disconnect();
+      silentGain.disconnect();
+      micStream.getTracks().forEach((track) => track.stop());
+      flushAudio(true);
+      document.querySelector("#mark-moment").disabled = true;
+      document.querySelector("#record-stop").disabled = true;
+      document.querySelector("#record-start").disabled = !speechAvailable || !document.querySelector("#consent").checked;
+      voiceStatus.textContent = "Opname gestopt; laatste fragmenten worden verwerkt…";
+      try {
+        await transcriptionQueue;
+        await audioContext.close();
+        voiceStatus.classList.remove("recording");
+        voiceStatus.textContent = "Opname gestopt. Selecteer passages en maak een samenvatting.";
+      } catch (error) {
+        voiceStatus.textContent = `Opname stoppen mislukt: ${error.message}`;
+      }
+      renderTranscript();
+    });
+
+    document.querySelector("#summarize").addEventListener("click", async (event) => {
+      const selected = transcriptSegments.filter((segment) => segment.selected);
+      if (!selected.length || !model.value) return;
+      const button = event.currentTarget;
+      button.disabled = true;
+      voiceStatus.textContent = "Samenvatting wordt lokaal gemaakt…";
+      const transcript = selected.map((segment) =>
+        `[${formatTime(segment.start)}] ${segment.text}`
+      ).join("\n");
+      try {
+        const response = await fetch("/api/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: model.value, transcript }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Samenvatten mislukt.");
+        document.querySelector("#summary").textContent = data.summary;
+        voiceStatus.textContent = "Samenvatting klaar. Transcript en samenvatting bestaan alleen zolang deze pagina open is.";
+      } catch (error) {
+        voiceStatus.textContent = error.message;
+      } finally {
+        renderTranscript();
+      }
+    });
+
+    document.querySelector("#upload").addEventListener("click", async () => {
+      const input = document.querySelector("#file");
+      const file = input.files[0];
+      if (!file) {
+        status.textContent = "Kies eerst een .txt- of .md-bestand.";
+        return;
+      }
+      try {
+        const content = await file.text();
+        const response = await fetch("/api/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: file.name, content }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Upload mislukt.");
+        status.textContent = `${data.document} toegevoegd.`;
+        input.value = "";
+        await refreshDocuments();
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    });
+
+    renderBotSelect();
+    renderConversation();
+    refreshStatus();
+    refreshDocuments().catch((error) => {
+      status.textContent = `Documenten laden mislukt: ${error.message}`;
+    });
+  </script>
+</body>
+</html>
